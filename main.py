@@ -1,66 +1,80 @@
 import discord
 import random
-import asyncio
-from secret import Token
+from discord.ext import commands
+import secret
 
-# Token do seu bot Discord
-TOKEN = Token()
+# Configurações do bot
+TOKEN = secret.Token()
+INTENTS = discord.Intents.default()
+INTENTS.reactions = True
+INTENTS.guilds = True
+INTENTS.members = True
 
-# Lista de IDs dos canais onde os jogadores enviarão mensagens
-canais_jogadores = [
-    1000000000000001, 
-    1000000000000002,
-    1000000000000003,
-    1000000000000004,
-    1000000000000005,
-    1000000000000006
+bot = commands.Bot(command_prefix='!', intents=INTENTS)
+
+# IDs dos cargos
+ROLES = [
+    1233585397674807306,  # Transportador
+    1233585496182100060,  # Lixeiro
+    1233585570224279562,  # Filtrador
+    1233585639337885696,  # Clasificador
+    1233585729968541788,  # Aplicador
+    1233585794543779901,   # Analista
 ]
 
-# Funções dos jogadores
-funcoes = ['Transportador', 'Lixeiro', 'Filtrador', 'Classificador', 'Aplicador', 'Analista']
+# IDs dos emojis
+ASSIGN_ROLE_EMOJI = '🎲'  # Emoji para atribuir cargos
+REMOVE_ROLE_EMOJI = '❌'  # Emoji para remover cargos
 
-# Inicialização do cliente Discord
+# Mensagem de referência para as reações (substitua pelo ID real da mensagem)
+MESSAGE_ID = 1251707323508854845
 
-intents = discord.Intents.default()
-intents.message_content = True
-client = discord.Client(intents=intents)
+assigned_roles = set()
 
-
-# Lista para armazenar os textos dos jogadores
-textos_jogadores = []
-
-@client.event
+@bot.event
 async def on_ready():
-    print('Bot está online!')
+    print(f'Bot conectado como {bot.user}')
 
-@client.event
-async def on_message(message):
-    if message.content.startswith('/start'):
-        await message.channel.send('Para jogar, reaja a esta mensagem com o emoji 🎲.')
-
-@client.event
-async def on_reaction_add(reaction, user):
-    if user.bot:
+@bot.event
+async def on_raw_reaction_add(payload):
+    if payload.message_id != MESSAGE_ID:
         return
 
-    # Checa se a reação é a desejada e conta quantas reações foram recebidas
-    if str(reaction.emoji) == '🎲':
-        if len(reaction.message.reactions) >= 6:
-            await iniciar_jogo()
+    guild = bot.get_guild(payload.guild_id)
+    member = guild.get_member(payload.user_id)
 
-async def iniciar_jogo():
-    # Limpa a lista de textos dos jogadores
-    textos_jogadores.clear()
+    if member.bot:
+        return
 
-    # Aguarda 120 segundos para os jogadores enviarem seus textos
-    await asyncio.sleep(120)
+    if str(payload.emoji) == ASSIGN_ROLE_EMOJI:
+        await assign_role(member)
+    elif str(payload.emoji) == REMOVE_ROLE_EMOJI:
+        await remove_roles(member)
 
-# Coleta a última mensagem de cada canal dos jogadores
-for canal_id in canais_jogadores:
-    canal = client.get_channel(canal_id)
-    messages = await canal.history(limit=1).flatten()
-    if messages:
-        textos_jogadores.append(messages[0].content)
+async def assign_role(member):
+    guild = member.guild
+    available_roles = [guild.get_role(role_id) for role_id in ROLES if role_id not in assigned_roles]
 
-# Conecta ao servidor do Discord
-client.run(TOKEN)
+    if not available_roles:
+        await member.send("Todos os cargos já foram atribuídos.")
+        return
+
+    selected_role = random.choice(available_roles)
+    await member.add_roles(selected_role)
+    assigned_roles.add(selected_role.id)
+
+    await member.send(f"Cargo {selected_role.name} atribuído com sucesso!")
+
+async def remove_roles(member):
+    guild = member.guild
+    roles_to_remove = [guild.get_role(role_id) for role_id in ROLES if guild.get_role(role_id) in member.roles]
+
+    for role in roles_to_remove:
+        await member.remove_roles(role)
+        if role.id in assigned_roles:
+            assigned_roles.remove(role.id)
+
+    await member.send("Todos os cargos foram removidos!")
+
+
+bot.run(TOKEN)

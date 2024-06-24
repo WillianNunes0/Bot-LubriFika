@@ -10,7 +10,7 @@ INTENTS.reactions = True
 INTENTS.guilds = True
 INTENTS.members = True
 
-bot = commands.Bot(command_prefix='!', intents=INTENTS)
+bot = commands.Bot(command_prefix='/', intents=INTENTS)
 
 # IDs dos cargos
 ROLES = [
@@ -19,7 +19,7 @@ ROLES = [
     1233585570224279562,  # Filtrador
     1233585639337885696,  # Clasificador
     1233585729968541788,  # Aplicador
-    1233585794543779901,   # Analista
+    1233585794543779901,  # Analista
 ]
 
 # IDs dos emojis
@@ -46,9 +46,11 @@ async def on_raw_reaction_add(payload):
     if member.bot:
         return
 
-    if str(payload.emoji) == ASSIGN_ROLE_EMOJI:
+    emoji = payload.emoji.name  # Obtém o nome do emoji reagido
+
+    if emoji == ASSIGN_ROLE_EMOJI:
         await assign_role(member)
-    elif str(payload.emoji) == REMOVE_ROLE_EMOJI:
+    elif emoji == REMOVE_ROLE_EMOJI:
         await remove_roles(member)
 
 async def assign_role(member):
@@ -76,5 +78,32 @@ async def remove_roles(member):
 
     await member.send("Todos os cargos foram removidos!")
 
+# ID do canal de voz fixo
+VOICE_CHANNEL_ID = 1254611602792251404
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if after.channel and after.channel.id == VOICE_CHANNEL_ID:
+        # Verificar o número de membros no canal de voz
+        members_in_channel = len(after.channel.members)
+
+        if members_in_channel == 6:
+            await assign_impostor_and_supervisor(after.channel.members)
+
+async def assign_impostor_and_supervisor(members):
+    # Garantir que os membros selecionados sejam diferentes entre si
+    impostor, supervisor = random.sample(members, 2)
+    
+    # Enviar mensagem apenas para impostor
+    try:
+        await impostor.send("Você é o impostor (Destrua a fábrica).")
+    except discord.Forbidden:
+        print("Não foi possível enviar mensagem para o impostor.")
+
+    # Enviar mensagem apenas para supervisor
+    try:
+        await supervisor.send("Você é o supervisor (Descubra quem é o impostor).")
+    except discord.Forbidden:
+        print("Não foi possível enviar mensagem para o supervisor.")
 
 bot.run(TOKEN)
